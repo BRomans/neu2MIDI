@@ -14,8 +14,8 @@
 # define TRIG_CAPACITY 32
 # define EPOCH_CAPACITY 8
 
-# define WINDOW_LENGTH_MS 2000
-# define WINDOW_OVERLAP_MS 1900
+# define WINDOW_LENGTH_MS 3000
+# define WINDOW_OVERLAP_MS 2900
 
 // ---
 

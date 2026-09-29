@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.26)
 
-project(tiny_bci_ssvep_experiment)
+project(tiny_gpio_ssvep)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
@@ -57,15 +57,21 @@ function(ADD_TARGET TARGET_NAME SOURCES)
   target_link_libraries(${TARGET_NAME} tiny_bci)
   target_link_libraries(${TARGET_NAME} lsl)
   target_link_libraries(${TARGET_NAME} tinycthread)
+  target_link_libraries(${TARGET_NAME} stdc++)
+
 endfunction()
 
 add_target(${PROJECT_NAME}
-  src/program/main.c
-  src/presentation.c
-  src/program/presentation_helpers.c
-  src/cli/program_mode_selection.c
+        src/program/main.c
+        src/presentation.c
+        src/gpio_presentation.c
+        src/program/presentation_helpers.c
+        src/cli/program_mode_selection.c
 )
 target_link_libraries(${PROJECT_NAME} raylib)
+target_link_libraries(${PROJECT_NAME} pigpio pthread)
+
 add_dependencies(${PROJECT_NAME} copy_assets)
 
 add_target("headless_${PROJECT_NAME}" src/program/main_headless.c)
+add_target("gpio_${PROJECT_NAME}" src/program/main_gpio.c)

@@ -10,6 +10,7 @@ typedef enum {
 ProgramMode promptProgramModeSelection(void);
 
 void initializeProgram(ProgramMode mode);
+void initializeProgramGPIO(ProgramMode mode);
 void awaitPromptedProgramStart(void);
 void updateProgram(void);
 void cleanUpProgram(void);

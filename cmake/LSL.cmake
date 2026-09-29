@@ -19,7 +19,7 @@ if (${USE_LSL_TIMESTAMPS})
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_LSL_TIMESTAMPS)
 endif()
 
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+#set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(liblsl
     GIT_REPOSITORY https://github.com/sccn/liblsl.git
     GIT_TAG        v1.16.2

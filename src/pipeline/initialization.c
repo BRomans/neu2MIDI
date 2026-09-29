@@ -62,7 +62,7 @@ static void addCCANodesToTinyBCIPipeline(const float *frequencies)
     /* register notch & bandpass node in preprocessing group */
     notchConfiguration.freq_hz = 60.0f;
     notchConfiguration.q_factor = 10.0f;
-    notchConfiguration.n_harmonics = 2;
+    notchConfiguration.n_harmonics = 1;
     notch_init(&notchNode, &notchConfiguration);
 
     bp_configure(&bandpassConfiguration,2.0f, 45.0f, 3);
@@ -78,7 +78,7 @@ static void addCCANodesToTinyBCIPipeline(const float *frequencies)
 
     cca_init(&ccaNode, &ccaConfiguration, refSignals, referenceSignalsCapacity);
 
-    ccaModelConfiguration.temperature = 0.1f;
+    ccaModelConfiguration.temperature = 0.3f;
     ccaModelConfiguration.n_freqs = N_FREQS;
     cca_model_init(&ccaModel, &ccaModelConfiguration);
 

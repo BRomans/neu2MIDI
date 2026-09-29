@@ -1,6 +1,7 @@
 # pragma once
 
 void initializeTrialConductor(uint16_t, uint16_t, float, float);
+void initializeTrialConductorEndless(uint16_t targetCount, float stimulusDuration);
 
 void setTrialStartCallback(void (*onTrialStart)(uint16_t));
 void setTrialEndCallback(void (*onTrialEnd)(uint16_t));

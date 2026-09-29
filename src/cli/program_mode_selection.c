@@ -1,4 +1,5 @@
 # include "cli/program_mode_selection.h"
+# include <stdio.h>
 # include "cli/helpers.h"
 
 # include "program/helpers.h"
@@ -124,20 +125,45 @@ void initializeProgram(ProgramMode mode)
     IF_PRESENTATION_ONLY(connectToHeadlessRuntime();)
 }
 
+void initializeProgramGPIO(ProgramMode mode)
+{
+    programMode = mode;
+    initializeTrialPresentation(
+        &onTrialStart, &onTrialEnd,
+        &onAllTrialsCompleted
+    );
+    IF_STANDALONE(
+        printf("Initializing EEG Source...\n");
+        initializeSelectedEEGSource();
+    )
+    openLslTriggerOutlet();
+
+    IF_STANDALONE(
+        initializePipelineWithEEGSourceParameters();
+        startUpdateThreadForSelectedEEGSource();
+        printf("Awaiting Filter Stabilization...\n");
+        awaitFilterStabilization(&cleanUpProgram);
+    )
+
+    IF_PRESENTATION_ONLY(connectToHeadlessRuntime();)
+}
+
 void awaitPromptedProgramStart(void)
 {
-    while (!IsKeyPressed(KEY_SPACE))
-    {
-        drawPreparationScreen("Press Spacebar to Start");
-        IF_STANDALONE(
-            if (!isSelectedEEGSourceConnected()) return;
-            updatePipeline(&cleanUpProgram);
-        )
-        IF_PRESENTATION_ONLY(
-            if(!isLslInferenceSourceConsumable()) return;
-        )
-        closeIfPromptedTo(&cleanUpProgram);
-    }
+    printf("Starting...\n");
+
+    // while (!IsKeyPressed(KEY_SPACE))
+    // {
+    //     drawPreparationScreen("Press Spacebar to Start");
+    //     IF_STANDALONE(
+    //         if (!isSelectedEEGSourceConnected()) return;
+    //         updatePipeline(&cleanUpProgram);
+    //     )
+    //     IF_PRESENTATION_ONLY(
+    //         if(!isLslInferenceSourceConsumable()) return;
+    //     )
+    //     closeIfPromptedTo(&cleanUpProgram);
+    // }
 }
 
 void updateProgram(void)

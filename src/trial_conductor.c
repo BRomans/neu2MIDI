@@ -14,7 +14,7 @@ static uint16_t target = 0;
 
 static uint16_t stimulusRoundsToBeCompleted = 0;
 
-enum State { BREAK, STIMULUS };
+enum State { BREAK, STIMULUS, ENDLESS };
 static uint16_t state = BREAK;
 
 
@@ -26,6 +26,12 @@ void initializeTrialConductor(
     stimulusRoundsToBeCompleted = stimulusRoundsToComplete;
     stimulusTimer = createMicrosecondTimer(stimulusDuration);
     breakTimer = createMicrosecondTimer(breakDuration);
+}
+
+void initializeTrialConductorEndless(uint16_t pTargetCount, float stimulusDuration)
+{
+    targetCount = pTargetCount;
+    stimulusTimer = createMicrosecondTimer(stimulusDuration);
 }
 
 void setTrialStartCallback(void (*onTrialStart)(uint16_t)) { trialStartCallback = onTrialStart; }
