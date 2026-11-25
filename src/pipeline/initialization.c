@@ -1,4 +1,5 @@
 # include "pipeline.h"
+#include "program/constants.h"
 
 static void initializeTinyBCIPipelineStorage(uint8_t, uint32_t);
 static void setTinyBCIPipelineConfiguration(uint8_t, float);
@@ -53,14 +54,14 @@ static void setTinyBCIPipelineConfiguration(uint8_t channelCount, float sampleRa
     tbciConfiguration.use_preprocessing = true;
     tbciConfiguration.use_feature_extraction = true;
     tbciConfiguration.use_decoder = true;
-    tbciConfiguration.log_enabled = true; /* set true to enable CSV logging */
+    tbciConfiguration.log_enabled = false; /* set true to enable CSV logging */
     tbciConfiguration.log_processed = false; /* set true to enable logging of preprocessed data */
 }
 
 static void addCCANodesToTinyBCIPipeline(const float *frequencies)
 {
     /* register notch & bandpass node in preprocessing group */
-    notchConfiguration.freq_hz = 60.0f;
+    notchConfiguration.freq_hz = NOTCH_FREQ;
     notchConfiguration.q_factor = 10.0f;
     notchConfiguration.n_harmonics = 1;
     notch_init(&notchNode, &notchConfiguration);
@@ -69,25 +70,30 @@ static void addCCANodesToTinyBCIPipeline(const float *frequencies)
     bp_init(&bandpassNode, &bandpassConfiguration);
 
     /* Register CCA node and model */
-    ccaConfiguration.n_freqs = N_FREQS;
+    ccaConfiguration.n_freqs = N_CLASSES;
     ccaConfiguration.n_harmonics = N_HARMONICS;
-    for (uint16_t i = 0; i < N_FREQS; i++)
+    for (uint16_t i = 0; i < N_CLASSES; i++)
     {
         ccaConfiguration.freqs[i] = frequencies[i];
     }
 
     cca_init(&ccaNode, &ccaConfiguration, refSignals, referenceSignalsCapacity);
 
-    ccaModelConfiguration.temperature = 0.3f;
-    ccaModelConfiguration.n_freqs = N_FREQS;
-    cca_model_init(&ccaModel, &ccaModelConfiguration);
+    //ccaModelConfiguration.temperature = 0.1f;
+    ccaModelConfiguration.n_freqs = N_CLASSES;
+    ccaModelConfiguration.n_freqs     = N_CLASSES;
+    ccaModelConfiguration.min_excess  = 0.15f;
+    ccaModelConfiguration.excess_temp = 0.05f;
 
-    trialAveragingConfiguration.n_reps = 3;
-    ta_init(&trialAveragingNode, &trialAveragingConfiguration);
+    TBCI_Status s = cca_model_init(&ccaModel, &ccaModelConfiguration);
+    if (s != TBCI_OK) {
+        fprintf(stderr, "cca_model_init failed: %d\n", s);
+    }
+
+    trialAveragingConfiguration.n_reps = 1;
 
     group_add_node(&tbciContext.preprocessing.group, (TBCI_Node *)&notchNode);
     group_add_node(&tbciContext.preprocessing.group, (TBCI_Node *)&bandpassNode);
     group_add_node(&tbciContext.features.group, (TBCI_Node *)&ccaNode);
     group_add_node(&tbciContext.decoder.group, (TBCI_Node *)&ccaModel);
-    group_add_node(&tbciContext.decoder.group, (TBCI_Node *)&trialAveragingNode);
 }

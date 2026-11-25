@@ -1,5 +1,4 @@
 # include "cli/program_mode_selection.h"
-# include <stdio.h>
 # include "cli/helpers.h"
 
 # include "program/helpers.h"
@@ -13,10 +12,13 @@
 # include "inference_logger.h"
 
 # include "cli/eeg_source_selection.h"
+# include "engine/serial_engine.h"
 
 static ProgramMode programMode;
 # define IF_STANDALONE(code) if(programMode == STANDALONE) { code }
 # define IF_PRESENTATION_ONLY(code) if(programMode == PRESENTATION_ONLY) { code }
+# define IF_PRESENTATION_ONLY_SERIAL(code) if(programMode == PRESENTATION_ONLY_SERIAL) { code }
+
 
 ProgramMode promptProgramModeSelection(void)
 {
@@ -28,13 +30,26 @@ ProgramMode promptProgramModeSelection(void)
         , PRESENTATION_ONLY
     );
 
-    uint32_t selection = getCLIIntegerSelection(PRESENTATION_ONLY);
+    printf("\t%u - Presentation Only With Serial (connected to TinyBCI engine over USB serial)\n", PRESENTATION_ONLY_SERIAL);
+
+    uint32_t selection = getCLIIntegerSelection(PRESENTATION_ONLY_SERIAL);
+
 
     printf(
         "Proceeding in %s mode...\n",
         selection == STANDALONE ? "Standalone" : "Presentation Only"
     );
     return (ProgramMode)selection;
+}
+
+static void connectToSerialEngine(void)
+{
+    if (!openSerialEngine()) { cleanUpProgram(); exit(EXIT_FAILURE); }
+    while (!isSerialEngineReady())
+    {
+        updateSerialEngine();
+        displayMessageOrExit(getSerialEngineStateName(), &cleanUpProgram);
+    }
 }
 
 // ---
@@ -45,6 +60,7 @@ static void onTrialStart(uint16_t target)
         uint64_t triggerTimestamp = pushTrigger(target + 1);
         notifyInferenceLoggerOfNewTarget(target, triggerTimestamp);
     )
+    IF_PRESENTATION_ONLY_SERIAL(pushSerialEngineTrigger(target + 1);)
     pushLslTrigger(target + 1);
     setPresentationTarget(target);
     resumeStimulus();
@@ -53,6 +69,7 @@ static void onTrialStart(uint16_t target)
 static void onTrialEnd(uint16_t nextTarget)
 {
     IF_STANDALONE(pushTrigger(TRIAL_END_CODE);)
+    IF_PRESENTATION_ONLY_SERIAL(pushSerialEngineTrigger(TRIAL_END_CODE);)
     pushLslTrigger(TRIAL_END_CODE);
     setPresentationTarget(nextTarget);
     pauseStimulus();
@@ -73,6 +90,9 @@ static bool tryGetInference(TinyBCIInference *inference, uint64_t *timestamp)
     )
     IF_PRESENTATION_ONLY(
         return pollLslInferenceSource(inference, timestamp);
+    )
+    IF_PRESENTATION_ONLY_SERIAL(
+        return pollSerialEngineInference(inference, timestamp);
     )
     return false;
 }
@@ -117,12 +137,12 @@ void initializeProgram(ProgramMode mode)
 
     IF_STANDALONE(
         initializePipelineWithEEGSourceParameters();
-        startUpdateThreadForSelectedEEGSource();
         drawMessageScreen("Awaiting Filter Stabilization...");
         awaitFilterStabilization(&cleanUpProgram);
     )
 
     IF_PRESENTATION_ONLY(connectToHeadlessRuntime();)
+    IF_PRESENTATION_ONLY_SERIAL(connectToSerialEngine();)
 }
 
 void initializeProgramGPIO(ProgramMode mode)
@@ -140,7 +160,6 @@ void initializeProgramGPIO(ProgramMode mode)
 
     IF_STANDALONE(
         initializePipelineWithEEGSourceParameters();
-        startUpdateThreadForSelectedEEGSource();
         printf("Awaiting Filter Stabilization...\n");
         awaitFilterStabilization(&cleanUpProgram);
     )
@@ -148,22 +167,26 @@ void initializeProgramGPIO(ProgramMode mode)
     IF_PRESENTATION_ONLY(connectToHeadlessRuntime();)
 }
 
+
 void awaitPromptedProgramStart(void)
 {
-    printf("Starting...\n");
+    while (!IsKeyPressed(KEY_SPACE))
+    {
+        drawPreparationScreen("Press Spacebar to Start");
+        IF_STANDALONE(
+            if (!isSelectedEEGSourceConnected()) return;
+            updateEEGSourceAndPipeline(&cleanUpProgram);
+        )
+        IF_PRESENTATION_ONLY(
+            if(!isLslInferenceSourceConsumable()) return;
+        )
+        IF_PRESENTATION_ONLY_SERIAL(
+        updateSerialEngine();
+        if (!isSerialEngineConnected()) return;
+        )
 
-    // while (!IsKeyPressed(KEY_SPACE))
-    // {
-    //     drawPreparationScreen("Press Spacebar to Start");
-    //     IF_STANDALONE(
-    //         if (!isSelectedEEGSourceConnected()) return;
-    //         updatePipeline(&cleanUpProgram);
-    //     )
-    //     IF_PRESENTATION_ONLY(
-    //         if(!isLslInferenceSourceConsumable()) return;
-    //     )
-    //     closeIfPromptedTo(&cleanUpProgram);
-    // }
+        closeIfPromptedTo(&cleanUpProgram);
+    }
 }
 
 void updateProgram(void)
@@ -182,6 +205,15 @@ void updateProgram(void)
         }
     )
 
+    IF_PRESENTATION_ONLY_SERIAL(
+    updateSerialEngine();
+        if (!isSerialEngineConnected())
+        {
+            drawMessageScreen("Connection Lost");
+            return;
+        }
+    )
+
     IF_STANDALONE(
         if (!isSelectedEEGSourceConnected())
         {
@@ -191,7 +223,7 @@ void updateProgram(void)
     )
 
     updateTrialConductor();
-    IF_STANDALONE(updatePipeline(&cleanUpProgram);)
+    IF_STANDALONE(updateEEGSourceAndPipeline(&cleanUpProgram);)
 
     TinyBCIInference inference;
     uint64_t timestamp;
@@ -208,6 +240,8 @@ void cleanUpProgram(void)
 {
     IF_STANDALONE(cleanUpEEGSourceAndPipeline();)
     IF_PRESENTATION_ONLY(closeLslInferenceSource();)
+    IF_PRESENTATION_ONLY_SERIAL(closeSerialEngine();)
     closeLslTriggerOutlet();
+    cleanUpTrialConductor();
     stopPresentation();
 }

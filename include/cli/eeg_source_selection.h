@@ -6,6 +6,7 @@ void runEEGSourceSelection(void);
 
 void initializeSelectedEEGSource(void);
 void updateSelectedEEGSource(void);
+void waitForSelectedEEGSourceData(uint32_t timeoutMs);
 void cleanUpSelectedEEGSource(void);
 
 typedef enum {

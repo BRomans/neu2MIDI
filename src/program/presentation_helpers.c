@@ -5,37 +5,34 @@
 # include "trial_conductor.h"
 # include "presentation.h"
 
-# include "program/helpers.h"
-# include "program/constants.h"
-
-# include "pipeline.h"
-# include "trial_conductor.h"
-# include "presentation.h"
-
 void initializeTrialPresentation(
     void (*trialStartCallback)(uint16_t),
     void (*trialEndCallback)(uint16_t),
     void (*allTrialsCompletedCallback)(void)
 )
 {
+    int16_t initialTarget;
     if (ENDLESS_MODE)
     {
-        initializeTrialConductorEndless(N_FREQS, STIMULUS_DURATION);
+        initialTarget = initializeTrialConductor(
+            N_CLASSES, TRIAL_COUNT,
+            STIMULUS_DURATION, BREAK_DURATION
+        );
         setTrialStartCallback(trialStartCallback);
     }
     else
     {
-        initializeTrialConductor(
-            N_FREQS, TRIAL_COUNT,
+        initialTarget = initializeTrialConductor(
+            N_CLASSES, TRIAL_COUNT,
             STIMULUS_DURATION, BREAK_DURATION
         );
         setTrialStartCallback(trialStartCallback);
         setTrialEndCallback(trialEndCallback);
         setAllTrialsCompletedCallback(allTrialsCompletedCallback);
-    }
 
-    initializePresentation(FREQUENCIES, N_FREQS);
-    setPresentationTarget(0);
+        initializePresentation((float[])FREQUENCIES, N_CLASSES);
+        setPresentationTarget(initialTarget);
+    }
 }
 
 void displayInference(TinyBCIInference inference, uint64_t timestamp)

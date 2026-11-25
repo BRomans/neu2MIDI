@@ -12,10 +12,13 @@
 
 # define SIG_CAPACITY 1024
 # define TRIG_CAPACITY 32
+# ifdef TBCI_PICO
+# define EPOCH_CAPACITY 2
+# else
 # define EPOCH_CAPACITY 8
-
-# define WINDOW_LENGTH_MS 3000
-# define WINDOW_OVERLAP_MS 2900
+# endif
+# define WINDOW_LENGTH_MS 2000
+# define WINDOW_OVERLAP_MS 1900
 
 // ---
 
@@ -56,9 +59,16 @@ extern TBCI_Config tbciConfiguration;
 extern TBCI_Context tbciContext;
 
 // CCA constants
-# define N_FREQS 6
+# ifndef N_CLASSES
+#   define N_CLASSES 6
+# endif
 # define N_HARMONICS 3
 # define N_COMPONENTS (N_HARMONICS * 2)
+# if TBCI_PARADIGM_ID == TBCI_PARADIGM_P300_ID || TBCI_PARADIGM_ID == TBCI_PARADIGM_SSVEP_ID
+#   define N_OUTPUTS (N_CLASSES + 1)   // stimuli, then idle (check the trial cycle's order)
+# else
+#   define N_OUTPUTS N_CLASSES
+# endif
 extern size_t referenceSignalsCapacity;
 extern float *refSignals;
 

@@ -12,13 +12,16 @@ static MicrosecondTimer breakTimer;
 static uint16_t targetCount = 0;
 static uint16_t target = 0;
 
+static uint16_t *targetOrder;
+static uint16_t trialIndex = 0;
+
 static uint16_t stimulusRoundsToBeCompleted = 0;
 
 enum State { BREAK, STIMULUS, ENDLESS };
 static uint16_t state = BREAK;
 
 
-void initializeTrialConductor(
+uint16_t initializeTrialConductor(
     uint16_t pTargetCount, uint16_t stimulusRoundsToComplete,
     float stimulusDuration, float breakDuration)
 {
@@ -26,6 +29,11 @@ void initializeTrialConductor(
     stimulusRoundsToBeCompleted = stimulusRoundsToComplete;
     stimulusTimer = createMicrosecondTimer(stimulusDuration);
     breakTimer = createMicrosecondTimer(breakDuration);
+
+    targetOrder = malloc(targetCount * sizeof(uint16_t));
+    seedRandomizationWithCurrentTime();
+    randomizeTargetOrder(targetOrder, targetCount);
+    return target = targetOrder[0];
 }
 
 void initializeTrialConductorEndless(uint16_t pTargetCount, float stimulusDuration)
@@ -58,11 +66,18 @@ static void startTrial(void)
 static void endTrial(void)
 {
     state = BREAK;
-    target = (target + 1) % targetCount;
     resetMicrosecondTimer(&breakTimer);
 
+    bool roundCompleted = ++trialIndex == targetCount;
+    if (roundCompleted)
+    {
+        trialIndex = 0;
+        randomizeTargetOrder(targetOrder, targetCount);
+    }
+    target = targetOrder[trialIndex];
+
     if (trialEndCallback != NULL) trialEndCallback(target);
-    if (target == 0) 
+    if (roundCompleted) 
     {
         if (stimulusRoundCompletedCallback != NULL) stimulusRoundCompletedCallback();
         if (--stimulusRoundsToBeCompleted <= 0)
@@ -91,4 +106,13 @@ void resetTrialConductor(void)
 {
     resetMicrosecondTimer(&breakTimer);
     resetMicrosecondTimer(&stimulusTimer);
+}
+
+void cleanUpTrialConductor(void)
+{
+    if (targetCount > 0)
+    {
+        free(targetOrder);
+        targetCount = 0;
+    }
 }

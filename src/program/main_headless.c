@@ -1,3 +1,4 @@
+# include <signal.h>
 # include "program/helpers.h"
 
 # include "pipeline.h"
@@ -11,16 +12,43 @@
 # include "cli/recording_options.h"
 # include "cli/helpers.h"
 
+#ifdef TBCI_MEASURE
+# include "tick_logger.h"
+# include "measurements/gpio_marker.h"
+#endif
+
+# define IDLE_TIMEOUT_MS 8
+
 static uint16_t currentTargetLabel = 0;
-static void onTriggerReceived(uint16_t code)
+
+static void onTriggerReceived(uint16_t code, uint64_t timestamp)
 {
-    uint64_t pushTimestamp = pushTrigger(code);
+    uint64_t pushTimestamp = pushTriggerWithTimestamp(code, timestamp);
     if (code == TRIAL_END_CODE) return; // nothing to do at trial boundaries here
     currentTargetLabel = code - 1; // matches presenter's pushTrigger(target + 1)
     notifyInferenceLoggerOfNewTarget(currentTargetLabel, pushTimestamp);
 }
 
 // ---
+
+static volatile sig_atomic_t stopRequested = 0;
+
+static void onStopSignal(int signalNumber)
+{
+    if (stopRequested) exit(EXIT_SUCCESS); // second stop signal: leave immediately
+    stopRequested = 1;
+    printf("\n-!-\n");
+    signal(signalNumber, onStopSignal);
+}
+
+static void installStopHandlers(void)
+{
+    signal(SIGINT, onStopSignal);
+    signal(SIGTERM, onStopSignal);
+# if defined(SIGHUP)
+    signal(SIGHUP, onStopSignal);
+# endif
+}
 
 static void cleanUp(void)
 {
@@ -40,25 +68,28 @@ static void handleDisconnection(const char *message)
 }
 
 static void updateProgram(void)
-{    
+{
     if (!isSelectedEEGSourceConnected())
     {
         handleDisconnection("EEG Source Disconnected");
     }
-
-    updatePipeline(&cleanUp);
+    waitForSelectedEEGSourceData(IDLE_TIMEOUT_MS);
+    updateEEGSourceAndPipeline(&cleanUp);
 }
 
 int main(void)
 {
+    installStopHandlers();
+    openLslInferenceOutlet();
+
     runRecordingOptionSelection();
     runEEGSourceSelection();
 
     initializeSelectedEEGSource();
+
     printHorizontalRule();
     initializePipelineWithEEGSourceParameters();
     initializeLslTriggerSource(&onTriggerReceived);
-    startUpdateThreadForSelectedEEGSource();
 
     printf("Searching for Presenter App...\n");
     awaitConnection(
@@ -71,9 +102,12 @@ int main(void)
 
     awaitFilterStabilization(&cleanUp);
 
-    openLslInferenceOutlet();
+#ifdef TBCI_MEASURE
+    initGpioMarkers();
+    initTickLogger("headless", 0.0);            // log from here on
+#endif
 
-    while (true)
+    while (!stopRequested)
     {
         updateLslTriggerSource();
    
@@ -82,7 +116,7 @@ int main(void)
             handleDisconnection("Presenter App Disconnected");
         }
 
-        updateProgram();
+        updateEEGSourceAndPipeline(&cleanUp);
 
         TinyBCIInference inference;
         if (tryGetTinyBCIInference(&inference)) {
