@@ -9,10 +9,10 @@ if (TBCI_PICO)
   set(PICO_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/pico-sdk")
   include(${PICO_SDK_PATH}/pico_sdk_init.cmake)
 
-  project(neu2MIDI LANGUAGES C CXX ASM)
+  project(b2MIDI LANGUAGES C CXX ASM)
   pico_sdk_init()
 else()
-  project(neu2MIDI)
+  project(b2MIDI)
 endif()
 
 set(CMAKE_C_STANDARD 11)
@@ -23,27 +23,28 @@ include(cmake/TinyBCI.cmake)
 # --- sources that build everywhere
 
 set(CORE_SOURCES
-    src/microsecond_timer.c
+        src/microsecond_timer.c
 
-    src/pipeline/pipeline.c
-    src/pipeline/initialization.c
-    src/pipeline/storage.c
-    src/pipeline/triggers.c
-    src/pipeline/helpers.c
+        src/pipeline/pipeline.c
+        src/pipeline/initialization.c
+        src/pipeline/storage.c
+        src/pipeline/triggers.c
+        src/pipeline/helpers.c
 
-    src/serial/utils.c
-    src/serial/data_source.c
-    src/serial/data_source_reading.c
+        src/serial/utils.c
+        src/serial/data_source.c
+        src/serial/data_source_reading.c
 
-    src/data/unicorn_eeg_source.c
-    src/serial/bci_link.c
-    src/engine/serial_engine.c
-
+        src/data/unicorn_eeg_source.c
+        src/serial/bci_link.c
+        src/engine/serial_engine.c
 )
 
 if (TBCI_PICO)
 
-  # --- Pico 2 W firmware
+  # ==========================================================================
+  # Pico 2 W firmware (LEDs/markers via the Pico SDK's gpio_put, no pigpio)
+  # ==========================================================================
 
   set(PICO_TARGET headless_${PROJECT_NAME}_pico)
 
@@ -51,7 +52,6 @@ if (TBCI_PICO)
           ${CORE_SOURCES}
           src/serial/pico_rfcomm.c
           src/program/main_headless_pico.c
-          src/serial/bci_link.c
           src/inference_logger.c
           src/engine/usb_link.c
           src/engine/usb_descriptors.c
@@ -89,7 +89,9 @@ if (TBCI_PICO)
 
 else()
 
-  # --- desktop
+  # ==========================================================================
+  # Desktop / Raspberry Pi (Linux, macOS, Windows)
+  # ==========================================================================
 
   include(cmake/LSL.cmake)
   include(cmake/Raylib.cmake)
@@ -108,6 +110,7 @@ else()
       src/cli/eeg_source_selection.c
       src/cli/eeg_selection_prompts.c
       src/cli/recording_options.c
+      src/cli/keyboard.c
 
       src/serial/unix.c
       src/serial/windows.c
@@ -124,27 +127,72 @@ else()
   function(ADD_TARGET TARGET_NAME SOURCES)
     add_executable(${TARGET_NAME} ${SOURCES} ${ARGN} ${SHARED_SOURCES} ${LSL_SOURCES})
 
-    set_target_properties(${TARGET_NAME} PROPERTIES COMPILE_WARNING_AS_ERROR ON)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+            COMPILE_WARNING_AS_ERROR ON
+            LINKER_LANGUAGE CXX)   # liblsl is C++; replaces linking stdc++ by hand
     target_precompile_headers(${TARGET_NAME} PRIVATE include/pch.h)
     target_include_directories(${TARGET_NAME} PRIVATE include)
 
-    target_link_libraries(${TARGET_NAME} tiny_bci)
-    target_link_libraries(${TARGET_NAME} lsl)
-    target_link_libraries(${TARGET_NAME} stdc++)
-
+    target_link_libraries(${TARGET_NAME} PRIVATE tiny_bci lsl)
   endfunction()
+
+  # Presenter logic shared by the screen app and the LED app.
+  # Both frontends implement presentation.h, so only ONE of
+  # presentation.c / gpio_presentation.c may go into a target.
+  set(PRESENTER_SOURCES
+          src/cli/program_mode_selection.c
+          src/program/presentation_helpers.c
+  )
+
+  # --- 1. Standalone app: raylib screen (macOS / Linux / Windows / Raspberry Pi)
 
   add_target(${PROJECT_NAME}
           src/program/main.c
-          src/presentation.c
-          src/gpio_presentation.c
           src/stimuli/stimulus_pattern.c
-          src/program/presentation_helpers.c
-          src/cli/program_mode_selection.c
+          src/presentation.c
+          ${PRESENTER_SOURCES}
   )
-  target_link_libraries(${PROJECT_NAME} raylib)
-  target_link_libraries(${PROJECT_NAME} pigpio pthread)
+  target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
   add_dependencies(${PROJECT_NAME} copy_assets)
+
+  # --- 2. LED app: gpio_presentation.c
+  #        real pigpio on a Pi Zero / Pi 4, mock pigpio everywhere else
+
+  find_path(PIGPIO_INCLUDE_DIR pigpio.h)
+  find_library(PIGPIO_LIBRARY pigpio)
+  if (PIGPIO_INCLUDE_DIR AND PIGPIO_LIBRARY)
+    set(_pigpio_default ON)
+  else()
+    set(_pigpio_default OFF)
+  endif()
+  option(TBCI_USE_PIGPIO "Drive real GPIO with pigpio (Raspberry Pi); OFF = mock" ${_pigpio_default})
+
+  set(GPIO_TARGET gpio_${PROJECT_NAME})
+  add_target(${GPIO_TARGET}
+          src/program/main_gpio.c
+          src/gpio_presentation.c
+          ${PRESENTER_SOURCES}
+  )
+
+  if (TBCI_USE_PIGPIO)
+    find_package(Threads REQUIRED)
+    target_include_directories(${GPIO_TARGET} PRIVATE ${PIGPIO_INCLUDE_DIR})
+    target_link_libraries(${GPIO_TARGET} PRIVATE ${PIGPIO_LIBRARY} Threads::Threads)
+    message(STATUS "${GPIO_TARGET}: real pigpio (${PIGPIO_LIBRARY})")
+  else()
+    target_sources(${GPIO_TARGET} PRIVATE src/mock/pigpio_mock.c)
+    target_include_directories(${GPIO_TARGET} BEFORE PRIVATE src/mock)
+    target_compile_definitions(${GPIO_TARGET} PRIVATE TBCI_PIGPIO_MOCK=1
+            N_CLASSES=4
+            FREQUENCIES=4.5f,5.0f,5.5f,6.0f
+            ENDLESS_MODE=1
+    )
+    # keep the precompiled header away from <windows.h>
+    set_source_files_properties(src/mock/pigpio_mock.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    message(STATUS "${GPIO_TARGET}: mock pigpio (no hardware)")
+  endif()
+
+  # --- 3. Headless engine (LSL in/out, no frontend)
 
   add_target("headless_${PROJECT_NAME}" src/program/main_headless.c)
   if (TBCI_MEASURE)
@@ -158,8 +206,10 @@ else()
     endif()
   endif()
 
+  # --- 4. SSVEP box experiment (console, external stimulus box)
+
   set(SSVEP_BOX_TARGET "ssvep_box_${PROJECT_NAME}")
   add_target(${SSVEP_BOX_TARGET} src/program/main_ssvep_box.c)
-  add_target("gpio_${PROJECT_NAME}" src/program/main_gpio.c)
-  target_compile_definitions(${SSVEP_BOX_TARGET} PRIVATE N_FREQS=4 FREQUENCIES={4.5f,5.0f,5.5f,6.0f})
+  target_compile_definitions(${SSVEP_BOX_TARGET} PRIVATE N_FREQS=4 FREQUENCIES=4.5f,5.0f,5.5f,6.0f)
+
 endif()
