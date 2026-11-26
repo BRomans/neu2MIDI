@@ -12,6 +12,6 @@ endif()
 FetchContent_Declare(
   tiny_bci
   GIT_REPOSITORY ${TINY_BCI_REPO_URL}
-  GIT_TAG 1590909aaba5bdf6d082996b6a4ba9559a55afcc
+  GIT_TAG 5aae5a77fd8c599cd6205b9090d8d55ecd4b77f3 # TODO replace with main branch hash
 )
 FetchContent_MakeAvailable(tiny_bci)
