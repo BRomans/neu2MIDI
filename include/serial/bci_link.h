@@ -17,6 +17,12 @@
 # include <stdint.h>
 # include <stdbool.h>
 # include <stddef.h>
+# include "pipeline/storage.h"
+
+# define BCI_LINK_PROTOCOL_VERSION 1
+
+# define BCI_LINK_EEG_CHANNELS 8               // channels per EEG frame; larger samples span frames
+# define BCI_LINK_MAX_CLASSES  N_OUTPUTS
 
 # define BCI_LINK_PROTOCOL_VERSION 1
 
@@ -25,11 +31,10 @@
 # define BCI_LINK_STOP_BYTE0  0x0D
 # define BCI_LINK_STOP_BYTE1  0x0A
 
-# define BCI_LINK_PAYLOAD_SIZE 48
-# define BCI_LINK_FRAME_SIZE   (4 + BCI_LINK_PAYLOAD_SIZE + 4)   // 56
-
-# define BCI_LINK_EEG_CHANNELS 8   // one EEG sample per frame
-# define BCI_LINK_MAX_CLASSES  N_OUTPUTS   // must be >= N_FREQS
+# define BCI_LINK_EEG_PAYLOAD        (16 + 4 * BCI_LINK_EEG_CHANNELS)   // 48
+# define BCI_LINK_INFERENCE_PAYLOAD  (24 + 4 * BCI_LINK_MAX_CLASSES)    // 48 for 6 outputs, 52 for 7
+# define BCI_LINK_PAYLOAD_SIZE (BCI_LINK_EEG_PAYLOAD > BCI_LINK_INFERENCE_PAYLOAD ? BCI_LINK_EEG_PAYLOAD : BCI_LINK_INFERENCE_PAYLOAD)
+# define BCI_LINK_FRAME_SIZE   (4 + BCI_LINK_PAYLOAD_SIZE + 4)
 # define BCI_LINK_LOG_LENGTH   (BCI_LINK_PAYLOAD_SIZE - 1)
 
 # define BCI_LINK_STATUS_LINK_ID_OFFSET 22   // 0 = USB Link A, 1 = USB Link B, 2+ = TCP

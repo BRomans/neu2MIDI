@@ -4,6 +4,7 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
+#include <_time.h>
 
 # define STIM_LED_COUNT 4
 # define FEEDBACK_LED_COUNT 4
