@@ -11,9 +11,13 @@
  * Same flow as main_headless.c on the Pi, with bci_link over USB instead of
  * LSL: connect the headset, run the pipeline, take triggers from any client,
  * stream EEG rows, inference rows, trigger echoes and status to every client.
+ *
+ * Also drives the LED stimulus like gpio_b2MIDI on the Raspberry Pi:
+ * one flickering LED per frequency, one feedback LED per class.
+ *
  * ## Build
  *
- *   cmake --build . --target headless_tiny_bci_ssvep_experiment_pico
+ *   cmake --build . --target headless_b2MIDI_pico
  *
  * ## Flash
  *
@@ -32,13 +36,19 @@
 
 # include "engine/link_hub.h"
 # include "engine/link_outputs.h"
+# include "pico/led_stimulus.h"
 
 # define UNICORN_NAME      "UN-2024.09.14"
 # define IDLE_TIMEOUT_MS   8
 # define STATUS_PERIOD_US  1000000
 # define SELF_TEST_TARGET  0   // >0: push this trigger after stabilization (no presenter needed)
 
-static const float STIMULUS_FREQUENCIES[N_FREQS] = FREQUENCIES;
+// 1: drive PROFILE_PIN / DECISION_PIN for energy-per-inference measurements
+# define MEASURE_ENERGY    0
+
+_Static_assert(N_CLASSES <= LED_STIMULUS_COUNT, "more stimulus frequencies than LEDs");
+
+static const float STIMULUS_FREQUENCIES[N_CLASSES] = { FREQUENCIES };
 static BCIEngineState engineState = BCI_ENGINE_BOOTING;
 static bool pipelineRunning = false;
 static uint32_t maxTickUs = 0;
@@ -46,8 +56,13 @@ static uint32_t maxTickUs = 0;
 #define BCI_LINK_TICKS  0x87   // add next to your other message types
 #define TICK_BATCH_MAX  11
 
-#define PROFILE_PIN  15
-#define DECISION_PIN 14
+# if MEASURE_ENERGY
+#   define PROFILE_PIN  15
+#   define DECISION_PIN 14
+#   define MARK(pin, level) gpio_put((pin), (level))
+# else
+#   define MARK(pin, level) ((void)0)
+# endif
 
 static uint32_t tickBatch[TICK_BATCH_MAX];
 static uint16_t tickDecisionMask = 0;
@@ -76,7 +91,12 @@ static void onTriggerReceived(uint16_t code)
     if (!pipelineRunning) return; // nothing to align it with yet
     uint64_t timestamp = pushTrigger(code);
     sendTriggerEchoToLink(code, timestamp);
-    if (code == TRIAL_END_CODE) return;
+    if (code == TRIAL_END_CODE)
+    {
+        setLedStimulusEnabled(false);   // break between trials, like pauseStimulus() on the Pi
+        return;
+    }
+    setLedStimulusEnabled(true);
     notifyInferenceLoggerOfNewTarget(code - 1, timestamp); // presenter sends target + 1
 }
 
@@ -137,6 +157,7 @@ static void halt(const char *message)
 {
     printf("FATAL: %s\n", message);
     engineState = BCI_ENGINE_FAULT;
+    setLedStimulusEnabled(false);
     for (;;)   // keep USB alive: status, logs and the 1200-baud BOOTSEL reset
     {
         serviceLink();
@@ -153,13 +174,13 @@ static void updateProgram(void)
 
     if (!isUnicornEEGSourceConnected()) halt("Unicorn disconnected");
 
-    gpio_put(PROFILE_PIN, 1);
+    MARK(PROFILE_PIN, 1);
     uint64_t start = time_us_64();
     if (updateTinyBCIPipeline() != 0) halt("pipeline update failed");
     uint32_t elapsed = (uint32_t)(time_us_64() - start);
-    gpio_put(PROFILE_PIN, 0);
+    MARK(PROFILE_PIN, 0);
 
-    gpio_put(DECISION_PIN, hasTinyBCIInference());
+    MARK(DECISION_PIN, hasTinyBCIInference());
 
     if (elapsed > maxTickUs) maxTickUs = elapsed;
 
@@ -180,9 +201,12 @@ int main(void)
     initializeLinkHub();                       // USB first, so logs and status show up early
     setPicoSerialIdleCallback(&serviceLink);   // keep USB alive during Bluetooth waits
 
-    // To measure energy per inference
+# if MEASURE_ENERGY
     gpio_init(PROFILE_PIN);  gpio_set_dir(PROFILE_PIN, GPIO_OUT);
     gpio_init(DECISION_PIN); gpio_set_dir(DECISION_PIN, GPIO_OUT);
+# endif
+
+    initLedStimulus(STIMULUS_FREQUENCIES, N_CLASSES);   // LEDs stay dark until READY
 
     if (cyw43_arch_init()) halt("radio init failed");
     setLed(true);
@@ -210,6 +234,7 @@ int main(void)
     awaitFilterStabilization();
     engineState = BCI_ENGINE_READY;
     setLed(true);
+    setLedStimulusEnabled(true);   // start flickering; a client's TRIAL_END pauses it
 
 # if SELF_TEST_TARGET
     onTriggerReceived(SELF_TEST_TARGET);
@@ -224,6 +249,7 @@ int main(void)
         {
             uint64_t timestamp = getCurrentMicrosecondTimestamp();
             sendInferenceToLink(inference, timestamp);
+            showLedSelection(inference.predictedLabel);
             printf("%llu | inference %d (%.0f%%)\n",
                 timestamp, inference.predictedLabel, inference.confidence * 100.0f);
         }

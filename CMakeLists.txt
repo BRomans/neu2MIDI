@@ -57,11 +57,15 @@ if (TBCI_PICO)
           src/engine/usb_descriptors.c
           src/engine/link_hub.c
           src/engine/link_outputs.c
+          src/pico/led_stimulus.c
   )
 
   target_compile_definitions(${PICO_TARGET} PRIVATE
           TBCI_PICO=1
           CYW43_LWIP=0   # Bluetooth only, no Wi-Fi stack
+          N_CLASSES=4
+          FREQUENCIES=4.5f,5.0f,5.5f,6.0f
+
   )
 
   target_precompile_headers(${PICO_TARGET} PRIVATE include/pch.h)
@@ -78,6 +82,8 @@ if (TBCI_PICO)
           tiny_bci
           tinyusb_device
           pico_unique_id
+          hardware_pwm
+          hardware_clocks
   )
 
   # First milestone: printf over the Pico's USB serial port.
