@@ -21,7 +21,7 @@ void initializePipelineWithEEGSourceParameters(void)
     configureEEGTimestampAnchorSamplePeriod(sampleRate);
 
     TBCI_Status pipelineStatus = initializeTinyBCIPipeline(
-        (float[])FREQUENCIES, channelCount, sampleRate
+        (float[]){FREQUENCIES}, channelCount, sampleRate
     );
     if (pipelineStatus != TBCI_OK) exit(EXIT_FAILURE);
     initializeInferenceLogger();

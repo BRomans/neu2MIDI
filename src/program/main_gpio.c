@@ -1,6 +1,6 @@
-#include <signal.h>
+# include <signal.h>
 
-# include "cli/program_mode_selection.h"
+# include "cli/program_mode_selection.h"   // only for the ProgramMode type
 # include "cli/eeg_source_selection.h"
 # include "cli/recording_options.h"
 # include "cli/helpers.h"
@@ -8,25 +8,12 @@
 static volatile sig_atomic_t keepRunning = 1;
 static void handleShutdown(int signum) { (void)signum; keepRunning = 0; }
 
-int main(int argc, char *argv[])
+int main(void)
 {
-# if defined(_WIN32) || defined(_WIN64)
-# else
-    printf("Setting GL Version overrides for Raspberry Pi...\n");
-    putenv("MESA_GL_VERSION_OVERRIDE=3.3");
-    putenv("MESA_GLSL_VERSION_OVERRIDE=330");
-# endif
+    runRecordingOptionSelection();
+    runEEGSourceSelection();
 
-    ProgramMode mode = promptProgramModeSelection();
-    printHorizontalRule();
-
-    if (mode == STANDALONE)
-    {
-        runRecordingOptionSelection();
-        runEEGSourceSelection();
-    }
-
-    initializeProgramGPIO(mode);
+    initializeProgramGPIO(STANDALONE);
     signal(SIGINT, handleShutdown);
     signal(SIGTERM, handleShutdown);
 

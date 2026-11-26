@@ -4,7 +4,9 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-#include <_time.h>
+# include <_time.h>
+# include "cli/keyboard.h"
+
 
 # define STIM_LED_COUNT 4
 # define FEEDBACK_LED_COUNT 4
@@ -34,6 +36,8 @@ static double nowSeconds(void)
 
 void initializePresentation(const float *pFrequencies, uint16_t pFrequencyCount)
 {
+    enableRawKeyboardInput();
+
     if (pFrequencyCount != STIM_LED_COUNT)
     {
         fprintf(stderr, "Expected %d frequencies for %d stim LEDs, got %u\n",
@@ -90,12 +94,14 @@ static void updateSelectionFeedback(void)
 
 void drawMessageScreen(const char *message)
 {
-    printf("%s\n", message);
+    static const char *last = NULL;
+    if (message != last) { printf("%s\n", message); last = message; }
 }
 
 void drawPreparationScreen(const char *message)
 {
-    printf("%s\n", message);
+    static const char *last = NULL;
+    if (message != last) { printf("%s\n", message); last = message; }
 }
 
 void drawStimulusScreen(void)
@@ -121,5 +127,13 @@ void stopPresentation(void)
     for (int i = 0; i < STIM_LED_COUNT; i++) gpioPWM(stimPins[i], 0);
     for (int i = 0; i < FEEDBACK_LED_COUNT; i++) gpioWrite(feedbackPins[i], 0);
     free(frequencies);
+    restoreKeyboardInput();
     gpioTerminate();
+}
+
+bool isStartKeyPressed(void) { return tryReadKey() == ' '; }
+
+bool shouldClosePresentation(void)
+{
+    return false;
 }

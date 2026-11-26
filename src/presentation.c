@@ -1,4 +1,6 @@
 # include "presentation.h"
+# include "presentation_raylib.h"
+# include "cli/keyboard.h"
 # include "stimuli/stimulus_pattern.h"
 
 static RenderTexture2D renderTarget;
@@ -99,6 +101,7 @@ void initializeGaborPatches()
 void initializePresentation(const float *pFrequencies, uint16_t pFrequencyCount)
 {
     initializeWindow();
+    enableRawKeyboardInput();
     initializePresenters(pFrequencies, pFrequencyCount);
     //initializeGaborPatches();
 }
@@ -331,6 +334,7 @@ void stopPresentation(void)
     free(frequencies);
     UnloadRenderTexture(renderTarget);
     UnloadTexture(stimulusTexture);
+    restoreKeyboardInput();
     CloseWindow();
 }
 
