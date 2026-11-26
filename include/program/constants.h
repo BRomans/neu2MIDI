@@ -3,14 +3,16 @@
 # define PROGRAM_CONSTANTS
 
 # ifndef FREQUENCIES
-#   define FREQUENCIES { 4.5f, 5.0f, 5.5f, 6.0f, 6.5f, 7.0f }
+#   define FREQUENCIES  4.5f, 5.0f, 5.5f, 6.0f, 6.5f, 7.0f
 # endif
 # ifndef NOTCH_FREQ
 #   define NOTCH_FREQ 60.0f
 # endif
 # define FILTER_STABILIZATION_DELAY 5.0f
 
-# define ENDLESS_MODE true
+#ifndef ENDLESS_MODE
+# define ENDLESS_MODE 0
+#endif
 
 # define TRIAL_COUNT 4
 # define STIMULUS_DURATION 6.0f

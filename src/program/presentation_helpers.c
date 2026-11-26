@@ -11,28 +11,22 @@ void initializeTrialPresentation(
     void (*allTrialsCompletedCallback)(void)
 )
 {
-    int16_t initialTarget;
-    if (ENDLESS_MODE)
-    {
-        initialTarget = initializeTrialConductor(
-            N_CLASSES, TRIAL_COUNT,
-            STIMULUS_DURATION, BREAK_DURATION
-        );
-        setTrialStartCallback(trialStartCallback);
-    }
-    else
-    {
-        initialTarget = initializeTrialConductor(
-            N_CLASSES, TRIAL_COUNT,
-            STIMULUS_DURATION, BREAK_DURATION
-        );
-        setTrialStartCallback(trialStartCallback);
-        setTrialEndCallback(trialEndCallback);
-        setAllTrialsCompletedCallback(allTrialsCompletedCallback);
+    int16_t initialTarget = initializeTrialConductor(
+        N_CLASSES, TRIAL_COUNT,
+        STIMULUS_DURATION, BREAK_DURATION
+    );
+    setTrialStartCallback(trialStartCallback);
 
-        initializePresentation((float[])FREQUENCIES, N_CLASSES);
-        setPresentationTarget(initialTarget);
-    }
+#if !ENDLESS_MODE
+    setTrialEndCallback(trialEndCallback);
+    setAllTrialsCompletedCallback(allTrialsCompletedCallback);
+#else
+    (void)trialEndCallback;
+    (void)allTrialsCompletedCallback;
+#endif
+
+    initializePresentation((float[]){FREQUENCIES}, N_CLASSES);
+    setPresentationTarget(initialTarget);
 }
 
 void displayInference(TinyBCIInference inference, uint64_t timestamp)
